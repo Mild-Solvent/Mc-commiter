@@ -2,6 +2,17 @@
 
 Commit Bubble is a Windows 10/11 desktop app that turns repository changes into a reviewed Conventional Commit using an AI provider you choose. It stays as a small always-on-top button, supports multiple saved repositories, and never gives a model permission to run Git commands.
 
+## Easiest installation
+
+Run `Commit-Bubble-Setup.exe` from the repository root. The assisted Windows installer creates shortcuts and can launch Commit Bubble immediately. On first launch, a four-step wizard:
+
+1. Explains the local-first safety model.
+2. Opens a folder picker for your Git repository.
+3. Lets you choose LM Studio, Ollama, an OpenAI-compatible server, OpenAI, Anthropic, or Gemini.
+4. Starts a detected local server when requested, tests the connection, finds models, encrypts any API key, and finishes setup.
+
+You can choose **Set up later** at any time; the wizard returns on the next launch until a repository has been added.
+
 ## Safety model
 
 - Git, filesystem, provider requests, credentials, and process launches live in Electron's isolated main process.

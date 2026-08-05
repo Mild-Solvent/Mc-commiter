@@ -153,7 +153,7 @@ export interface ProviderTestResult {
   models: string[]
 }
 
-export type WindowMode = 'bubble' | 'menu' | 'review' | 'settings'
+export type WindowMode = 'bubble' | 'menu' | 'review' | 'settings' | 'onboarding'
 
 export interface CommitBubbleApi {
   getSettings(): Promise<AppSettingsPublic>

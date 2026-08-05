@@ -11,6 +11,7 @@ playwright-report/
 *.cer
 *.log
 *.tsbuildinfo
+Commit-Bubble-Setup.exe
 .env
 .env.*
 !.env.example

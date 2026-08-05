@@ -52,7 +52,13 @@ export function App() {
   const activeProvider = settings?.providers.find((provider) => provider.id === settings.activeProviderId)
 
   useEffect(() => {
-    void window.commitBubble.getSettings().then(setSettings).catch((err) => setError(errorMessage(err)))
+    void window.commitBubble.getSettings().then((loaded) => {
+      setSettings(loaded)
+      if (loaded.repositories.length === 0) {
+        setView('onboarding')
+        void window.commitBubble.setWindowMode('onboarding')
+      }
+    }).catch((err) => setError(errorMessage(err)))
     return window.commitBubble.onAction((action) => {
       if (action === 'commit') void createPreview()
       else void openView(action === 'menu' ? 'menu' : 'settings')
@@ -201,7 +207,177 @@ export function App() {
           onClose={() => void closePanel()}
         />
       )}
+      {view === 'onboarding' && (
+        <OnboardingPanel
+          settings={settings}
+          onSettings={setSettings}
+          onFinish={() => void openView('bubble')}
+        />
+      )}
     </main>
+  )
+}
+
+function OnboardingPanel({
+  settings,
+  onSettings,
+  onFinish
+}: {
+  settings: AppSettingsPublic
+  onSettings: (settings: AppSettingsPublic) => void
+  onFinish: () => void
+}) {
+  const [step, setStep] = useState(0)
+  const [providerId, setProviderId] = useState(settings.activeProviderId || 'lmstudio')
+  const provider = settings.providers.find((candidate) => candidate.id === providerId) ?? settings.providers[0]
+  const [form, setForm] = useState<ProviderSaveRequest>(() => providerForm(provider))
+  const [models, setModels] = useState<string[]>([])
+  const [busy, setBusy] = useState(false)
+  const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
+  const repository = settings.repositories.find((repo) => repo.id === settings.activeRepositoryId)
+
+  useEffect(() => {
+    setForm(providerForm(provider))
+    setModels([])
+    setMessage('')
+    setError('')
+  }, [providerId])
+
+  async function addRepository() {
+    setBusy(true); setError('')
+    try {
+      await window.commitBubble.addRepository()
+      const next = await window.commitBubble.getSettings()
+      onSettings(next)
+      if (next.activeRepositoryId) setMessage('Repository added and ready.')
+    } catch (err) { setError(errorMessage(err)) } finally { setBusy(false) }
+  }
+
+  async function saveProviderForm(): Promise<AppSettingsPublic> {
+    const saved = await window.commitBubble.saveProvider(form)
+    const activated = await window.commitBubble.selectProvider(provider.id)
+    onSettings(activated)
+    return saved
+  }
+
+  async function startServer() {
+    setBusy(true); setError(''); setMessage('')
+    try {
+      await saveProviderForm()
+      const result = await window.commitBubble.startLocalServer(provider.id)
+      if (!result.ok) throw new Error(result.message)
+      setMessage(`${result.message} Wait a moment, then click Detect models.`)
+    } catch (err) { setError(errorMessage(err)) } finally { setBusy(false) }
+  }
+
+  async function detectModels() {
+    setBusy(true); setError(''); setMessage('')
+    try {
+      await saveProviderForm()
+      const result = await window.commitBubble.testProvider(provider.id)
+      if (!result.ok) throw new Error(result.message)
+      setModels(result.models)
+      if (result.models.length === 1) {
+        const nextForm = { ...form, model: result.models[0], secret: '' }
+        setForm(nextForm)
+        onSettings(await window.commitBubble.saveProvider(nextForm))
+      }
+      setMessage(result.models.length ? `${result.models.length} model(s) found. Choose one below.` : 'Connected, but no models were found. Enter a model ID or load a model in the provider app.')
+    } catch (err) { setError(errorMessage(err)) } finally { setBusy(false) }
+  }
+
+  async function finish() {
+    setBusy(true); setError('')
+    try {
+      await saveProviderForm()
+      onSettings(await window.commitBubble.getSettings())
+      onFinish()
+    } catch (err) { setError(errorMessage(err)) } finally { setBusy(false) }
+  }
+
+  return (
+    <section className="panel onboarding-panel">
+      <header className="onboarding-header">
+        <div className="brand-lockup"><span className="brand-icon"><GitCommitIcon /></span><div><span className="eyebrow">DAV Studios</span><strong>Commit Bubble</strong></div></div>
+        <span className="step-count">Step {step + 1} of 4</span>
+      </header>
+      <div className="progress-track"><span style={{ width: `${((step + 1) / 4) * 100}%` }} /></div>
+
+      <div className="onboarding-content">
+        {step === 0 && (
+          <div className="welcome-step">
+            <span className="welcome-orb"><GitCommitIcon /></span>
+            <span className="eyebrow">A safer one-click commit</span>
+            <h1>Let’s get you ready in a few clicks.</h1>
+            <p>Choose a repository and connect the AI you already use. Commit Bubble reviews every message and file with you before Git is changed.</p>
+            <div className="assurance-grid">
+              <div><CheckIcon /><span><strong>Local-first</strong><small>LM Studio and Ollama supported</small></span></div>
+              <div><CheckIcon /><span><strong>Review first</strong><small>Nothing commits without approval</small></span></div>
+              <div><CheckIcon /><span><strong>Private keys</strong><small>Encrypted with Windows DPAPI</small></span></div>
+            </div>
+          </div>
+        )}
+
+        {step === 1 && (
+          <div className="wizard-step">
+            <span className="eyebrow">Your work</span>
+            <h1>Pick a Git repository</h1>
+            <p>Choose any folder inside the repository. Commit Bubble will resolve its top-level Git root and remember only that path.</p>
+            {repository ? (
+              <div className="selected-repository"><span className="repo-mark"><CheckIcon /></span><span><strong>{repository.displayName}</strong><small>{repository.rootPath}</small></span></div>
+            ) : (
+              <div className="wizard-empty"><FolderPlusIcon /><span>No repository selected yet</span></div>
+            )}
+            <button className="primary-button roomy no-drag" onClick={() => void addRepository()} disabled={busy}><FolderPlusIcon /> {repository ? 'Choose a different folder' : 'Choose repository folder'}</button>
+          </div>
+        )}
+
+        {step === 2 && (
+          <div className="wizard-step provider-choice-step">
+            <span className="eyebrow">AI connection</span>
+            <h1>Choose your provider</h1>
+            <p>Local providers keep your code on this computer. Cloud providers are always marked REMOTE and are never selected automatically.</p>
+            <div className="wizard-provider-grid">
+              {settings.providers.map((item) => (
+                <button className={`wizard-provider no-drag ${providerId === item.id ? 'selected' : ''}`} key={item.id} onClick={() => setProviderId(item.id)}>
+                  <span className={`locality-dot ${locality(item.baseUrl)}`} /><span><strong>{item.name}</strong><small>{locality(item.baseUrl)}</small></span>{providerId === item.id && <CheckIcon />}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {step === 3 && (
+          <div className="wizard-step connection-step">
+            <div className="connection-title"><div><span className="eyebrow">Final connection</span><h1>Connect {provider.name}</h1></div><span className={`provider-badge ${locality(form.baseUrl)}`}>{locality(form.baseUrl)}</span></div>
+            <label className="field-label">Server URL<input value={form.baseUrl} onChange={(event) => setForm({ ...form, baseUrl: event.target.value })} spellCheck={false} /></label>
+            <label className="field-label">API key or token <span className="optional">leave blank if local and not required</span><input type="password" autoComplete="off" value={form.secret ?? ''} placeholder={provider.hasSecret ? 'Stored securely · enter to replace' : 'Optional for local servers'} onChange={(event) => setForm({ ...form, secret: event.target.value })} /></label>
+            <label className="field-label">Model<input list="wizard-models" value={form.model} placeholder="Detect models or enter an ID" onChange={(event) => setForm({ ...form, model: event.target.value })} /><datalist id="wizard-models">{models.map((model) => <option key={model} value={model} />)}</datalist></label>
+            <div className="wizard-connection-actions">
+              {(provider.kind === 'lmstudio' || provider.kind === 'ollama') && <button className="secondary-button no-drag" onClick={() => void startServer()} disabled={busy}><PowerIcon /> Start server</button>}
+              <button className="secondary-button no-drag" onClick={() => void detectModels()} disabled={busy}><RefreshIcon /> Detect models</button>
+            </div>
+            <div className="privacy-note compact"><strong>{locality(form.baseUrl) === 'local' ? 'Local connection' : 'Remote connection'}.</strong> {locality(form.baseUrl) === 'local' ? 'Repository content stays on this machine.' : 'Selected change content will be sent to this provider only when you press the commit button.'}</div>
+          </div>
+        )}
+
+        {message && <div className="success-box wizard-message">{message}</div>}
+        {error && <ErrorBox message={error} />}
+      </div>
+
+      <footer className="onboarding-footer">
+        <button className="link-button no-drag" onClick={onFinish}>Set up later</button>
+        <div className="wizard-nav">
+          {step > 0 && <button className="secondary-button no-drag" onClick={() => { setStep(step - 1); setError(''); setMessage('') }} disabled={busy}>Back</button>}
+          {step < 3 ? (
+            <button className="primary-button no-drag" onClick={() => { setStep(step + 1); setError(''); setMessage('') }} disabled={busy || (step === 1 && !repository)}>Continue <ChevronIcon /></button>
+          ) : (
+            <button className="primary-button no-drag" onClick={() => void finish()} disabled={busy || !form.model.trim()}>{busy ? <span className="button-spinner" /> : <CheckIcon />} Finish setup</button>
+          )}
+        </div>
+      </footer>
+    </section>
   )
 }
 

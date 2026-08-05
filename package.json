@@ -14,7 +14,8 @@
     "test:e2e": "npm run build && playwright test",
     "build": "npm run typecheck && electron-vite build",
     "generate:icons": "node scripts/generate-icons.mjs",
-    "dist:win": "npm run generate:icons && npm run build && electron-builder --win nsis portable --x64",
+    "copy:installer": "node scripts/copy-root-installer.mjs",
+    "dist:win": "npm run generate:icons && npm run build && electron-builder --win nsis portable --x64 && npm run copy:installer",
     "verify:signature": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify-signatures.ps1"
   },
   "build": {

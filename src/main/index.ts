@@ -52,7 +52,8 @@ const modeSizes: Record<WindowMode, { width: number; height: number }> = {
   bubble: { width: 84, height: 84 },
   menu: { width: 380, height: 560 },
   review: { width: 460, height: 700 },
-  settings: { width: 500, height: 740 }
+  settings: { width: 500, height: 740 },
+  onboarding: { width: 540, height: 760 }
 }
 
 let mainWindow: BrowserWindow | null = null
@@ -333,7 +334,7 @@ function registerIpc(): void {
   })
   ipcMain.handle('window:mode', (event, mode: unknown) => {
     assertTrusted(event)
-    setWindowMode(z.enum(['bubble', 'menu', 'review', 'settings']).parse(mode))
+    setWindowMode(z.enum(['bubble', 'menu', 'review', 'settings', 'onboarding']).parse(mode))
   })
   ipcMain.handle('window:hide', (event) => {
     assertTrusted(event)

@@ -15,6 +15,10 @@ $signTool = Get-ChildItem -LiteralPath 'C:\Program Files (x86)\Windows Kits\10\b
 if (-not $signTool) { throw 'Windows SDK SignTool was not found.' }
 
 $artifacts = @(Get-ChildItem -LiteralPath $resolvedRelease -Filter '*.exe' -File)
+$rootInstaller = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\Commit-Bubble-Setup.exe'))
+if (Test-Path -LiteralPath $rootInstaller) {
+  $artifacts += Get-Item -LiteralPath $rootInstaller
+}
 if ($artifacts.Count -eq 0) { throw "No Windows executables found in $resolvedRelease" }
 
 foreach ($artifact in $artifacts) {
